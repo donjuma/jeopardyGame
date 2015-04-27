@@ -1,0 +1,32 @@
+Names:
+    Omar Juma (W01090035)
+    Jason Mueller (W00969487)
+    January 21, 2015
+
+Discussion:
+    We've tested our program and determined that all of the functionality is working correctly.
+
+Testing:
+    We opened multiple TMUX sessions and tested the client connecting to the server. We did
+    multiple connections simultaneously and ensured that the server still handled all of them.
+    We did our connections on a local machine. We also tested it with a client running on a
+    separate machine to our local server.
+
+Challenges:
+    Getting in contact with each other via canvas messaging proved ineffective and challenging. We ran
+    into a bug where we were passing send() the length argument as the size of the variable's address
+    (i.e.  &buf) which was being sent as a 64-bit number. However, our input was supposed to be a 32-bit
+    int. This caused the program to read the second argument (port number) as the previous guess variable.
+    After correcting the length size, we were able to get the program running as intended. This was the
+    most challenging aspect because it was really difficult to debug the root of the issue without knowing
+    exactly what was triggering the bug.
+
+Variants:
+    - Option to have the server host a selection of games for each client to choose from and run.
+    - Option to keep score and tie it to a certain IP/user for future purposes.
+    - Option to choose the difficulty (via larger sets, or less descriptive responses)
+    - Option to have the game played client-to-client with a server just hosting the process.
+    - Multiplayer mode. (See who guesses correctly first of the players). Ties in with client-to-client.
+    - Or any combination of the above...
+
+

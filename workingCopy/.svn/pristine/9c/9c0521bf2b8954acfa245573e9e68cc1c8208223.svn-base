@@ -1,0 +1,185 @@
+// Omar Juma
+// Updated last: February 17, 2015
+// CSCI 367, Winter 2015
+// Program 2
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <signal.h>
+
+#define QLEN 64 /* size of request queue */
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+
+int participantsList[64];
+int observersList[64];
+fd_set participants;
+fd_set observers;
+int topParticipant;
+int topObserver;
+
+
+void select_init() {
+    //ZERO OUT ALL OF OUR DESCRIPTOR SETS
+    FD_ZERO(&participants);
+    FD_zero(&observers);
+
+    //Now add listening sockets to respective sets
+    FD_SET(participant_socket, &participants);
+    FD_SET(observers_socket, &observers);
+
+    //Initialize the top most sockets so far
+    topParticipant = participant_socket;
+    topObserver = observer_socket;
+
+int main(int argc, char **argv) {
+    struct protoent *ptrp; /* pointer to a protocol table entry */
+    struct sockaddr_in sad_p; /* structure to hold server's address */
+    struct sockaddr_in sad_o; /* structure to hold server's address */
+    struct sockaddr_in cad; /* structure to hold client's address */
+    int participant_socket; /* socket descriptors */
+    int observer_socket; /* socket descriptors */
+    int participant_port; /* protocol port number for participant clients */
+    int observer_port; /* protocol port number for observer clients*/
+    int alen; /* length of address */
+    char buf[1024]; /* buffer for string the server sends */
+
+    if( argc != 3 ) {
+        fprintf(stderr,"Error: Wrong number of arguments\n");
+        fprintf(stderr,"usage:\n");
+        fprintf(stderr,"./server participant_port observer_port\n");
+        exit(EXIT_FAILURE);
+    }
+
+    memset((char *)&sad,0,sizeof(sad)); /* clear sockaddr structure */
+    sad_p.sin_family = AF_INET; /* set family to Internet */
+    sad_p.sin_addr.s_addr = INADDR_ANY; /* set the local IP address */
+    sad_o.sin_family = AF_INET; /* set family to Internet */
+    sad_o.sin_addr.s_addr = INADDR_ANY; /* set the local IP address */
+
+    participant_port = atoi(argv[1]); /* convert argument to binary */
+    observer_port = atoi(argv[2]);    /* convert argument to binary */
+
+    if ( (participant_port > 0) && (observer_port > 0)) { /* test for illegal value */
+        sad_p.sin_port = htons((u_short)participant_port);
+        sad_o.sin_port = htons((u_short)observer_port);
+    } else { /* print error message and exit */
+        fprintf(stderr,"Error: Bad port number %s\n",argv[1]);
+        exit(EXIT_FAILURE);
+    }
+
+    /* Map TCP transport protocol name to protocol number */
+    if ( ((long int)(ptrp = getprotobyname("tcp"))) == 0) {
+        fprintf(stderr, "Error: Cannot map \"tcp\" to protocol number");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Create a socket */
+    participant_socket = socket(PF_INET, SOCK_STREAM, ptrp->p_proto);
+    observer_socket = socket(PF_INET, SOCK_STREAM, ptrp->p_proto);
+    if ( (participant_socket < 0) || (observer_socket < 0) ) {
+        fprintf(stderr, "Error: Socket creation failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Bind a local address to the socket */
+    if (bind(participant_socket, (struct sockaddr *)&sad_p, sizeof(sad_p)) < 0) {
+        fprintf(stderr,"Error: Bind failed (Participant)\n");
+        exit(EXIT_FAILURE);
+    }
+    if (bind(observer_socket, (struct sockaddr *)&sad_o, sizeof(sad_o)) < 0) {
+        fprintf(stderr,"Error: Bind failed (observer)\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Specify size of request queue */
+    if (listen(participant_socket, QLEN) < 0) {
+        fprintf(stderr,"Error: Listen failed\n");
+        exit(EXIT_FAILURE);
+    }
+    if (listen(observer_socket, QLEN) < 0) {
+        fprintf(stderr,"Error: Listen failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Main server loop - accept and handle requests */
+    for (;;) {
+        select_init();
+
+        //Create temp sets that will be altered every iteration
+        part_fd = participants;
+        obsv_fd = observers;
+        int numfds = MAX(topParticipant, topObserver);
+        if (select(numfds+1, &part_fds, obsv_fds, NULL, NULL) == -1) {
+            fprint(stderr, "Error using select() call\n");
+            exit(EXIT_FAILURE);
+        }
+
+        //Iterate through all readable sockets (i.e., ready participants)
+        for (i=0; i <= topParticipant; i==) {
+            //Check if this [i] socket is ready to read...
+            if (FD_ISSET(i, &part_fd)){
+                //Check if new connection or participant
+                if (i == participant_socket){
+                    new_connection();
+                } else {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /*
+        buf[0] = 0;
+        alen = sizeof(cad);
+        if ( (sd2=accept(sd, (struct sockaddr *)&cad, &alen)) < 0) {
+            fprintf(stderr, "Error: Accept failed\n");
+            exit(EXIT_FAILURE);
+        }
+        write(sd2, &game_type[0], sizeof(game_type[0])); //Send player 1 game mode
+        sleep(1);
+        buf[0] = '2';
+        write(sd2, &buf[0], sizeof(buf[0])); //Inform Player 1 we are waiting for player 2
+
+        if ( (sd3=accept(sd, (struct sockaddr *)&cad, &alen)) < 0) {
+            fprintf(stderr, "Error: Accept failed\n");
+            exit(EXIT_FAILURE);
+        }
+        write(sd3, &game_type[0], sizeof(game_type[0])); //Send player 2 game mode
+        signal(SIGCHLD,SIG_IGN);
+        Child process logic
+        pid = fork();
+
+        if (pid < 0){
+            printf("Error in fork\n");
+        }
+
+        else if (pid == 0) {
+            close(sd);
+            game(sd2, sd3, game_type);
+            close(sd2);
+            close(sd3);
+            exit(0);
+        }
+        else{
+            close(sd2);
+            close(sd3);
+        }
+        */
+    }
+}

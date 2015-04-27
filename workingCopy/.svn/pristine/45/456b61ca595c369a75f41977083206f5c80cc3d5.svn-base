@@ -1,0 +1,255 @@
+//TODO: Make sure to support net-byte-order
+
+
+// Omar Juma
+// Updated last: February 17, 2015
+// CSCI 367, Winter 2015
+// Program 2
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <signal.h>
+
+#define QLEN 64 /* size of request queue */
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+
+int participantsList[64];;
+int observersList[64];
+fd_set participants, part_fds;
+fd_set observers, obsv_fds;
+int topParticipant;
+int topObserver;
+int observer_socket;
+int participant_socket;
+
+
+void select_init() {
+    //ZERO OUT ALL OF OUR DESCRIPTOR SETS
+    FD_ZERO(&participants);
+    FD_ZERO(&observers);
+    FD_ZERO(&part_fds);
+    FD_ZERO(&obsv_fds);
+
+
+    //Now add listening sockets to respective sets
+    FD_SET(participant_socket, &participants);
+    FD_SET(observer_socket, &observers);
+
+    //TODO: Make sure this inits at zero!
+    memset((char *) &participantsList, 0, sizeof(participantsList));
+    memset((char *) &observersList, 0, sizeof(observersList));
+
+    topParticipant = 0;
+    topObserver = 0;
+
+    //Initialize the top most sockets so far
+    printf("Participant Socket: %d\n Observer Socket: %d\n", participant_socket, observer_socket);
+    topParticipant = participant_socket;
+    topObserver = observer_socket;
+
+}
+
+void send_msg(char buffer[]) {
+    int i;
+
+    printf("Top observer: %d\nMessage: %s\n", topObserver, buffer);
+
+    for (i = 0; i <= topObserver; i++){
+        //Check of observer is ready to write to...
+        if (FD_ISSET(i, &obsv_fds)){
+            //Again, check for new observers...
+            if (i != observer_socket){
+                printf("Writing: %s, to %d\n", buffer, i);
+                if (write(i, buffer, sizeof(buffer)) < 0){
+                    printf("Error: writing to socket %d, \"%s\"", i, buffer);
+                }
+            }
+        }
+    }
+}
+
+void new_participant_connection(char *buf) {
+    int newParticipant;
+    int len, i;
+    char JOIN_MSG[100];
+
+    if ( (newParticipant = accept(participant_socket, NULL, NULL)) < 0){ // (struct sockaddr *)&cad, &alen)) < 0) {
+        fprintf(stderr, "Error accepting participant: %d\n", participant_socket);
+        exit(EXIT_FAILURE);
+    }
+    //Iterate over participantsList to find lowest free spot!
+    for (i = 0; ((i < 64) && (newParticipant != -1)); i++){
+        //Check if free spot in participantsList
+        if (participantsList[i] == 0){
+            printf("Free participants slot: %d\n", i);
+            printf("New Participant socket: %d\n", newParticipant);
+            //Check for disconnect...
+            if (newParticipant != -1){
+                participantsList[i] = newParticipant;
+                newParticipant = -1; //Mark socket as added to set
+
+                //Add new participant to set
+                FD_SET(participantsList[i], &participants);
+                topParticipant = MAX(topParticipant, i); //Recalc top most socket
+
+                //Update observers that new participant has joined
+                snprintf(JOIN_MSG, sizeof(JOIN_MSG), "USER %d has joined\n", i);
+                send_msg(JOIN_MSG);
+                break;
+            }
+        }
+
+        //If the participant was never marked/added to the set...
+        if (newParticipant != -1){
+            close(newParticipant);
+        }
+    }
+}
+
+
+void new_observer_connection() {
+}
+
+int main(int argc, char **argv) {
+    struct protoent *ptrp; /* pointer to a protocol table entry */
+    struct sockaddr_in sad_p; /* structure to hold server's address */
+    struct sockaddr_in sad_o; /* structure to hold server's address */
+    struct sockaddr_in cad; /* structure to hold client's address */
+    //int participant_socket; /* socket descriptors */
+    //int observer_socket; /* socket descriptors */
+    int participant_port; /* protocol port number for participant clients */
+    int observer_port; /* protocol port number for observer clients*/
+    int conn_status; /* integer to hold most recent connection status */
+    int alen; /* length of address */
+    int i, ob;
+    //fd_set part_fds;
+    //fd_set obsv_fds;
+    char buf[1024]; /* buffer for string the server sends */
+
+    if( argc != 3 ) {
+        fprintf(stderr,"Error: Wrong number of arguments\n");
+        fprintf(stderr,"usage:\n");
+        fprintf(stderr,"./server participant_port observer_port\n");
+        exit(EXIT_FAILURE);
+    }
+
+    memset((char *)&sad_p,0,sizeof(sad_p)); /* clear sockaddr structure */
+    memset((char *)&sad_o,0,sizeof(sad_o)); /* clear sockaddr structure */
+    sad_p.sin_family = AF_INET; /* set family to Internet */
+    sad_p.sin_addr.s_addr = INADDR_ANY; /* set the local IP address */
+    sad_o.sin_family = AF_INET; /* set family to Internet */
+    sad_o.sin_addr.s_addr = INADDR_ANY; /* set the local IP address */
+
+    participant_port = atoi(argv[1]); /* convert argument to binary */
+    observer_port = atoi(argv[2]);    /* convert argument to binary */
+
+    if ( (participant_port > 0) && (observer_port > 0)) { /* test for illegal value */
+        sad_p.sin_port = htons((u_short)participant_port);
+        sad_o.sin_port = htons((u_short)observer_port);
+    } else { /* print error message and exit */
+        fprintf(stderr,"Error: Bad port number %s\n",argv[1]);
+        exit(EXIT_FAILURE);
+    }
+
+    /* Map TCP transport protocol name to protocol number */
+    if ( ((long int)(ptrp = getprotobyname("tcp"))) == 0) {
+        fprintf(stderr, "Error: Cannot map \"tcp\" to protocol number");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Create a socket */
+    participant_socket = socket(PF_INET, SOCK_STREAM, ptrp->p_proto);
+    observer_socket = socket(PF_INET, SOCK_STREAM, ptrp->p_proto);
+    if ( (participant_socket < 0) || (observer_socket < 0) ) {
+        fprintf(stderr, "Error: Socket creation failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Bind a local address to the socket */
+    if (bind(participant_socket, (struct sockaddr *)&sad_p, sizeof(sad_p)) < 0) {
+        fprintf(stderr,"Error: Bind failed (Participant)\n");
+        exit(EXIT_FAILURE);
+    }
+    if (bind(observer_socket, (struct sockaddr *)&sad_o, sizeof(sad_o)) < 0) {
+        fprintf(stderr,"Error: Bind failed (observer)\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Specify size of request queue */
+    if (listen(participant_socket, QLEN) < 0) {
+        fprintf(stderr,"Error: Listen failed\n");
+        exit(EXIT_FAILURE);
+    }
+    if (listen(observer_socket, QLEN) < 0) {
+        fprintf(stderr,"Error: Listen failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    select_init(participant_socket, observer_socket);
+    /* Main server loop - accept and handle requests */
+    for (;;) {
+        printf("Memset\n");
+        memset(buf, 0, 1024);
+        //select_init(participant_socket, observer_socket);
+
+        //Create temp sets that will be altered every iteration
+        part_fds = participants;
+        obsv_fds = observers; //Might not be needed afterall
+        int numfds = MAX(topParticipant, topObserver);
+        printf("Calling Select...\n");
+        if (select(numfds+1, &part_fds, &obsv_fds, NULL, NULL) == -1) {
+            fprintf(stderr, "Error using select() call\n");
+            exit(EXIT_FAILURE);
+        }
+        printf("Checking new connections\n");
+        if (FD_ISSET(participant_socket, &part_fds)){
+            printf("%d is a new connection\n", participant_socket);
+            new_participant_connection(buf);
+        }
+
+        //REMOVE AS NEEDED
+        //part_fds = participants;
+        printf("Top participant: %d\n", topParticipant);
+        printf("Entering for loop\n");
+        //Iterate through all readable sockets (i.e., ready participants)
+        for (i=0; i <= topParticipant; i++) {
+            printf("Checking participant: %d - i:%d\n", participantsList[i], i);
+            //Check if this [i] socket is ready to read...
+            if (FD_ISSET(participantsList[i], &part_fds)){
+                printf("%d is ready to read..\n", participantsList[i]);
+                //IF THERE ARE ANY ERROR HERE CHANGE TO '&buf'
+                //TODO: change to while. keep reading until = 0;
+                if ((conn_status = read(participantsList[i], buf, sizeof(buf))) <= 0){
+                    if (conn_status == 0){
+                        //Alert observers that i has disconnected
+                        printf("Socket %d has terminated the connection\n", i);
+                    }
+                    else {
+                        //Some error has happened
+                        printf("Reading from socket %d has resulted in error\n", i);
+                    }
+
+                    //Either way, we need to close socket and remove from set
+                    //close(i);
+                    //FD_CLR(i, &participants);
+                }
+
+                else {
+                    printf("%d has written: %s\n", participantsList[i], buf);
+                    //TODO: Check if observer has disconnected too!!!!!!!!!!!!!
+                    //Read input from participant and write to observers
+                }
+            }
+            else{
+                continue;
+            }
+        }
+        printf("Out of foor loop\n");
+    }
+    return 0;
+}
