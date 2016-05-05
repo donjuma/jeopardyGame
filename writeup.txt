@@ -1,0 +1,26 @@
+Names:
+    Omar Juma (W01090035)
+    March 11, 2015
+
+Discussion:
+    I've tested this program and determined that most of the functionality is working correctly
+    For some reason, the participant is giving a SEGFAULT after reading the answer
+
+Testing:
+    I opened multiple TMUX sessions and tested the client connecting to the server. I did
+    multiple connections simultaneously and ensured that the server still handled all of them.
+    I did my connections on a local machine. I also tested it with a client running on a
+    separate machine to our local server.
+
+Challenges:
+    The challenges I faced were basic C-isms. Such as using pointer and refferencing, etc.
+    Also faced problems with select and writing.
+    I had to learn more about getting from standard in
+    Mainly string manipulation in C
+
+Variants:
+    - Option clear the screen after every round, better ASCII?
+    - Option to incorporate both clients into one.
+    - Option for first answer wins only
+    - Option for multiple channels.
+
